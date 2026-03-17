@@ -1,0 +1,91 @@
+import json
+import os
+
+from algorithms.base import BaseAlgorithm
+
+
+class Checkpointer:
+    """
+    Keeps exactly two checkpoints on disk:
+        <ckpt_dir>/latest.npz / latest.json  — overwritten every episode
+        <ckpt_dir>/best.npz  / best.json     — overwritten only when best_score improves
+
+    Keeping 'latest' separate from 'best' means training can always resume
+    from the most recent episode while 'best' is preserved for evaluation
+    without the two interfering with each other.
+
+    Each checkpoint is a pair of files:
+      - .npz  — network weights (written by the algorithm's save_weights)
+      - .json — metadata (episode number, total steps, best score, epsilon)
+    """
+
+    def __init__(self, ckpt_dir: str):
+        self.ckpt_dir = ckpt_dir
+
+    def _paths(self, tag: str) -> tuple[str, str]:
+        """Return the (.npz, .json) paths for a given tag ('latest' or 'best')."""
+        base = os.path.join(self.ckpt_dir, tag)
+        return base + ".npz", base + ".json"
+
+    def save(self, algo: BaseAlgorithm, meta: dict, is_best: bool = False):
+        """
+        Write the latest checkpoint and, if is_best, overwrite the best checkpoint too.
+
+        makedirs with exist_ok=True means the checkpoint directory is created
+        on the first save and subsequent saves are no-ops for the directory.
+        Both the weights and the metadata are always written atomically
+        (file-at-a-time) so a crash mid-save can only corrupt the file
+        being written, not the other one.
+        """
+        os.makedirs(self.ckpt_dir, exist_ok=True)
+
+        # Always update the latest checkpoint so training can resume
+        weights_path, meta_path = self._paths("latest")
+        algo.save_weights(weights_path)
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+        # Only overwrite the best checkpoint when the score actually improved
+        if is_best:
+            weights_path, meta_path = self._paths("best")
+            algo.save_weights(weights_path)
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=2)
+
+    def load(self, algo: BaseAlgorithm) -> dict | None:
+        """
+        Load the latest checkpoint into algo. Returns meta dict or None.
+
+        Returns None (instead of raising) when no checkpoint exists, so
+        callers can treat a fresh run and a resumed run uniformly.
+        """
+        weights_path, meta_path = self._paths("latest")
+        if not os.path.exists(weights_path):
+            # No checkpoint saved yet — caller should start from scratch
+            return None
+        try:
+            algo.load_weights(weights_path)
+            with open(meta_path) as f:
+                return json.load(f)
+        except Exception as e:
+            # Corrupt or incompatible checkpoint — warn and fall back to fresh start
+            print(f"Warning: failed to load checkpoint ({e}). Starting fresh.")
+            return None
+
+    def load_best(self, algo: BaseAlgorithm) -> dict | None:
+        """
+        Load the best checkpoint into algo. Returns meta dict or None.
+
+        Used during evaluation (--test --best) to restore the highest-scoring
+        policy seen during training rather than the most recently saved one.
+        """
+        weights_path, meta_path = self._paths("best")
+        if not os.path.exists(weights_path):
+            return None
+        try:
+            algo.load_weights(weights_path)
+            with open(meta_path) as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: failed to load best checkpoint ({e}). Starting fresh.")
+            return None
