@@ -5,9 +5,11 @@ Obs: 4 stacked 84x84 grayscale frames — shape (4, 84, 84)
 Net: CNNQNetwork (3 conv layers + MLP head, DeepMind Atari architecture)
 Algo: Standard DQN
 
-Breakout is a natural fit for pixel-based DQN because rewards are denser than
-Flappy Bird (+1 per brick), the scene is visually simple, and the same visual
-features repeat across long rallies.
+The environment follows the Atari Breakout scoring and match structure:
+  - 4 actions: NOOP, FIRE, RIGHT, LEFT
+  - 5 lives
+  - 2 walls total per game
+  - brick rewards by row: 7, 7, 4, 4, 1, 1
 
 Train:  python -m experiments.breakout_cnn_dqn
 Test:   python -m experiments.breakout_cnn_dqn --test [--best]
@@ -22,7 +24,7 @@ from training.parallel_runner import ParallelRunner
 from training.runner import RunnerConfig
 
 OBS_SHAPE = (4, 84, 84)
-ACTION_DIM = 3
+ACTION_DIM = 4
 
 
 def make_algo():

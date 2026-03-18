@@ -43,29 +43,33 @@ def _breakout_action() -> int:
     left = keys[pygame.K_a] or keys[pygame.K_LEFT]
     right = keys[pygame.K_d] or keys[pygame.K_RIGHT]
 
-    if left and not right:
-        return 1
     if right and not left:
         return 2
+    if left and not right:
+        return 3
     return 0
 
 
 def play_breakout() -> None:
-    print("Breakout controls: A/D or Left/Right to move, R to restart, Esc/Q to quit.")
+    print(
+        "Breakout controls: Space to serve, A/D or Left/Right to move, "
+        "R to restart, Esc/Q to quit."
+    )
     env = BreakoutEnv(render_mode=True)
     env.reset()
 
     try:
         running = True
         while running:
-            running, _, reset = _process_events()
+            running, fire, reset = _process_events()
             if not running:
                 break
             if reset:
                 env.reset()
                 continue
 
-            _, _, done, info = env.step(_breakout_action())
+            action = 1 if fire else _breakout_action()
+            _, _, done, info = env.step(action)
             if done:
                 print(f"Game Over! Score: {info['score']}")
                 env.reset()
