@@ -6,6 +6,12 @@ Current environments:
 - `Flappy Bird`
 - `Breakout`
 
+## Trained Agents
+
+| Flappy Bird | Breakout |
+|:-----------:|:--------:|
+| ![Flappy Bird](gifs/flappy.gif) | ![Breakout](gifs/breakout.gif) |
+
 Current training setup:
 - `DQN`
 - `DoubleDQN`
@@ -29,6 +35,9 @@ pip install -r requirements.txt
 `requirements.txt` currently contains the non-MLX runtime dependencies:
 - `pygame`
 - `numpy`
+
+For video recording during test:
+- `opencv-python` (`pip install opencv-python`)
 
 ## Project Layout
 
@@ -54,6 +63,8 @@ training/
   runner.py
   parallel_runner.py
   checkpoint.py
+checkpoints/          ← saved model weights and metadata
+runs/                 ← recorded best-run videos (mp4)
 play.py
 ```
 
@@ -167,6 +178,12 @@ python -m experiments.flappy.double_dqn --test
 python -m experiments.flappy.double_dqn --test --best
 ```
 
+Record the best-scoring episode as a video to `runs/`:
+
+```bash
+python -m experiments.flappy.double_dqn --test --best --record
+```
+
 Pixel-based CNN Double DQN:
 
 ```bash
@@ -207,10 +224,22 @@ Flappy Bird:
 Checkpoints are written under `checkpoints/<experiment_name>/` as:
 - `latest.npz` / `latest.json`
 - `best.npz` / `best.json`
+- `best_score.npz` / `best_score.json`
 
 For the parallel runner:
 - `latest` is always the most recent learner state
 - `best` is selected using the best rolling `Avg100`, not the best single episode
+- `best_score` is selected by the highest single-episode score
+
+## Video Recording
+
+Pass `--record` during test to capture the best-scoring episode as an MP4:
+
+```bash
+python -m experiments.flappy.double_dqn --test --best --record
+```
+
+Videos are saved to `runs/best_run_score{N}.mp4`. Each new best automatically replaces the previous file. Requires `opencv-python`.
 
 ## Notes
 
