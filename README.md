@@ -1,6 +1,6 @@
-# MLX Reinforcement Learning
+# MLX Deep Q-Learning
 
-Small reinforcement learning playground built around custom game environments and MLX-based DQN variants.
+Deep Q-Learning playground built around custom game environments and MLX-based DQN variants.
 
 Current environments:
 - `Flappy Bird`
