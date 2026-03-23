@@ -70,37 +70,8 @@ play.py
 
 ## Environments
 
-### Flappy Bird
-
-`envs/flappy_bird/env.py`
-
-Observation modes:
-- `state`: 5-dim vector
-- `pixels`: 4 stacked `84x84` grayscale frames
-
-Action space:
-- `0`: do nothing
-- `1`: flap
-
-### Breakout
-
-`envs/breakout/env.py`
-
-Atari-inspired rules:
-- `5` lives
-- `2` brick walls per game
-- max score `864`
-- brick values by row: `7, 7, 4, 4, 1, 1`
-
-Observation modes:
-- `state`: 8-dim vector
-- `pixels`: 4 stacked `84x84` grayscale frames
-
-Action space:
-- `0`: NOOP
-- `1`: FIRE
-- `2`: RIGHT
-- `3`: LEFT
+- [Flappy Bird](envs/flappy_bird/README.md)
+- [Breakout](envs/breakout/README.md)
 
 ## Training Experiments
 
@@ -194,30 +165,12 @@ python -m experiments.flappy.cnn_dqn --test --best
 
 ## Manual Play
 
-Run Breakout:
-
 ```bash
 python play.py --game breakout
-```
-
-Run Flappy Bird:
-
-```bash
 python play.py --game flappy
 ```
 
-Controls:
-
-Breakout:
-- `Space`: serve
-- `A` / `D` or `Left` / `Right`: move paddle
-- `R`: reset
-- `Esc` or `Q`: quit
-
-Flappy Bird:
-- `Space`: flap
-- `R`: reset
-- `Esc` or `Q`: quit
+See each environment's README for controls.
 
 ## Checkpoints
 
