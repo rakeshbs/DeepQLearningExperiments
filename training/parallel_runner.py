@@ -610,7 +610,6 @@ class ParallelRunner:
         epsilon: float = 0.0,
         record_best: bool = False,
     ):
-        self.checkpointer.install_process_logger()
         self._test_impl(
             best=best,
             best_score=best_score,
