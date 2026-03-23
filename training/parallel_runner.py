@@ -4,7 +4,7 @@ import random
 import resource
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import mlx.core as mx
 import numpy as np
@@ -83,7 +83,10 @@ def _actor_fn(
         while not weight_queue.empty():
             try:
                 msg = weight_queue.get_nowait()
-                if isinstance(msg, tuple):
+                if isinstance(msg, tuple) and len(msg) == 3:
+                    latest_weights, epsilon, new_pipe_gap = msg
+                    env.pipe_gap = new_pipe_gap
+                elif isinstance(msg, tuple):
                     latest_weights, epsilon = msg  # unpack (weights, new_epsilon)
                 else:
                     latest_weights = msg  # legacy scalar message (backward compat)
@@ -187,6 +190,7 @@ class ParallelRunner:
         actor_random_warmup_steps: Optional[
             int
         ] = None,  # None -> fall back to cfg.train_start
+        pipe_gap_schedule: Optional[List[Tuple[float, int]]] = None,  # [(score_threshold, pipe_gap), ...]
     ):
         self.env_factory = env_factory
         self.algo = algo
@@ -207,6 +211,7 @@ class ParallelRunner:
         self.lr_min = lr_min
         self.per_beta_increment = per_beta_increment
         self.actor_random_warmup_steps = actor_random_warmup_steps
+        self.pipe_gap_schedule = pipe_gap_schedule  # [(score_threshold, pipe_gap), ...]
         self.checkpointer = Checkpointer(config.ckpt_dir)
 
     def train(self):
@@ -279,8 +284,15 @@ class ParallelRunner:
         actor_epsilons = _ape_x_epsilons(
             self.num_actors, current_epsilon_base, self.epsilon_alpha
         )
+        # Initialise curriculum pipe_gap from schedule (largest gap = first entry)
+        current_pipe_gap = None
+        if self.pipe_gap_schedule:
+            current_pipe_gap = self.pipe_gap_schedule[0][1]
+            self.env_kwargs = {**self.env_kwargs, "pipe_gap": current_pipe_gap}
         print("Actor epsilons: " + "  ".join(f"{e:.4f}" for e in actor_epsilons))
         print(f"Actor random warmup steps: {actor_random_warmup_steps}")
+        if current_pipe_gap is not None:
+            print(f"Curriculum pipe_gap: {current_pipe_gap} (schedule: {self.pipe_gap_schedule})")
 
         buffer = PrioritizedReplayBuffer(
             cfg.buffer_size, alpha=self.per_alpha, beta=self.per_beta
@@ -407,6 +419,15 @@ class ParallelRunner:
                             )
                             if is_best:
                                 best_avg100 = avg
+                                # Advance curriculum: find the tightest gap the agent has earned
+                                if self.pipe_gap_schedule and best_avg100 is not None:
+                                    new_gap = current_pipe_gap
+                                    for threshold, gap in self.pipe_gap_schedule:
+                                        if best_avg100 >= threshold:
+                                            new_gap = gap
+                                    if new_gap != current_pipe_gap:
+                                        current_pipe_gap = new_gap
+                                        print(f"[CURRICULUM] best_avg100={best_avg100:.2f} → pipe_gap={current_pipe_gap}")
 
                             if episode % cfg.log_every == 0:
                                 best_avg_text = (
@@ -501,7 +522,8 @@ class ParallelRunner:
                                 except Exception:
                                     break
                             try:
-                                wq.put_nowait((weights_np, eps))
+                                msg = (weights_np, eps, current_pipe_gap) if current_pipe_gap is not None else (weights_np, eps)
+                                wq.put_nowait(msg)
                             except Exception:
                                 pass  # actor queue full — skip this sync cycle
 
@@ -586,6 +608,7 @@ class ParallelRunner:
         num_episodes: int = 0,
         render: bool = True,
         epsilon: float = 0.0,
+        record_best: bool = False,
     ):
         self.checkpointer.install_process_logger()
         self._test_impl(
@@ -595,6 +618,7 @@ class ParallelRunner:
             num_episodes=num_episodes,
             render=render,
             epsilon=epsilon,
+            record_best=record_best,
         )
 
     def _test_impl(
@@ -605,6 +629,7 @@ class ParallelRunner:
         num_episodes: int = 0,
         render: bool = True,
         epsilon: float = 0.0,
+        record_best: bool = False,
     ):
         """
         Run the policy in a single process.
@@ -615,6 +640,7 @@ class ParallelRunner:
             num_episodes: Stop after this many episodes. 0 = run until Ctrl+C.
             render: Whether to render visually. Set False for fast batch evaluation.
             epsilon: Epsilon for action selection (0 = pure greedy, 0.05 = standard eval).
+            record_best: Record each episode to a temp video; keep only the best-scoring one.
         """
         if best_score:
             meta = self.checkpointer.load_best_score(self.algo)
@@ -639,29 +665,76 @@ class ParallelRunner:
 
         test_kwargs = {**self.env_kwargs, **(env_kwargs_override or {})}
 
+        if record_best:
+            try:
+                import cv2
+            except ImportError:
+                print("record_best requires opencv-python: pip install opencv-python")
+                record_best = False
+
         scores = []
         episode = 0
+        best_recorded_score = -1
+        best_video_path = None
+        runs_dir = os.path.join(os.path.dirname(os.path.dirname(self.config.ckpt_dir)), "runs")
+        os.makedirs(runs_dir, exist_ok=True)
+        tmp_video_path = os.path.join(runs_dir, "_tmp_episode.mp4")
+
         try:
             while True:
                 env = self.env_factory(render_mode=render, **test_kwargs)
                 state = env.reset()
                 episode += 1
+
+                # Open a temp video writer for this episode (lazy-init on first frame)
+                writer = None
+
                 while True:
                     if epsilon > 0.0 and random.random() < epsilon:
                         action = random.randrange(self.algo.config.action_dim)
                     else:
                         action = self.algo.select_action(state)
                     state, _, done, info = env.step(action)
+                    if record_best and render:
+                        import cv2
+                        frame = env.capture_frame()
+                        if frame is not None:
+                            if writer is None:
+                                h, w = frame.shape[:2]
+                                writer = cv2.VideoWriter(
+                                    tmp_video_path,
+                                    cv2.VideoWriter_fourcc(*"mp4v"),
+                                    30,
+                                    (w, h),
+                                )
+                            writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                     if done:
                         score = info["score"]
                         scores.append(score)
                         print(f"Episode {episode} — Score: {score}")
                         break
+
+                if writer is not None:
+                    writer.release()
+                    if score > best_recorded_score:
+                        best_recorded_score = score
+                        new_path = os.path.join(runs_dir, f"best_run_score{score}.mp4")
+                        os.replace(tmp_video_path, new_path)
+                        if best_video_path and os.path.exists(best_video_path):
+                            os.remove(best_video_path)
+                        best_video_path = new_path
+                        print(f"  → New best! Saved video: {new_path}")
+                    elif os.path.exists(tmp_video_path):
+                        os.remove(tmp_video_path)
+
                 env.close()
                 if num_episodes > 0 and episode >= num_episodes:
                     break
         except KeyboardInterrupt:
             pass
+
+        if best_video_path:
+            print(f"\nBest run video saved to: {best_video_path}")
 
         if len(scores) > 1:
             arr = np.array(scores)

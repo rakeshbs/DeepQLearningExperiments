@@ -32,7 +32,7 @@ class FlappyBirdEnv(BaseEnv):
 
     action_dim = 2
 
-    def __init__(self, render_mode=False, obs_type="state"):
+    def __init__(self, render_mode=False, obs_type="state", pipe_gap=100):
         self.render_mode  = render_mode
         self.obs_type     = obs_type
         self.screen_width  = SCREEN_WIDTH
@@ -42,7 +42,7 @@ class FlappyBirdEnv(BaseEnv):
         self.gravity      = 1
         self.flap_power   = -9    # negative = upward in pygame's y-down coordinate system
         self.max_velocity = 10    # terminal velocity cap prevents instant-death dives
-        self.pipe_gap     = 100   # vertical gap the bird must fly through
+        self.pipe_gap     = pipe_gap
         self.pipe_velocity = -4   # pipes move left at this many pixels per step
 
         needs_pygame = render_mode or obs_type == "pixels"
@@ -254,6 +254,7 @@ class FlappyBirdEnv(BaseEnv):
             self._frame_stack = np.roll(self._frame_stack, shift=-1, axis=0)
             self._frame_stack[-1] = frame
 
+        reward = max(-1.0, min(1.0, reward))
         return self._get_obs(), reward, done, {"score": self.score}
 
     def _get_obs(self) -> np.ndarray:
@@ -377,6 +378,13 @@ class FlappyBirdEnv(BaseEnv):
         self._draw_frame()
         pygame.display.flip()
         self.clock.tick(FPS)
+
+    def capture_frame(self):
+        """Return the current frame as an RGB (H, W, 3) numpy array, or None if unavailable."""
+        if self.screen is None:
+            return None
+        frame = pygame.surfarray.array3d(self.screen)
+        return frame.transpose(1, 0, 2)  # (W, H, 3) → (H, W, 3)
 
     def close(self) -> None:
         """Release pygame resources. Only called in render_mode to avoid quitting a headless session."""

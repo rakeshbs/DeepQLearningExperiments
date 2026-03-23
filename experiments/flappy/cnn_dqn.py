@@ -107,6 +107,14 @@ runner = ParallelRunner(
     per_alpha=0.6,
     per_beta=0.4,
     env_kwargs={"obs_type": "pixels"},  # tells FlappyBirdEnv to return pixel observations
+    pipe_gap_schedule=[
+        # (best_avg100_threshold, pipe_gap) — sorted easiest → hardest
+        (0.0,  200),  # start wide
+        (1.0,  175),
+        (5.0,  150),
+        (10.0, 125),
+        (20.0, 100),  # real difficulty
+    ],
 )
 
 if __name__ == "__main__":

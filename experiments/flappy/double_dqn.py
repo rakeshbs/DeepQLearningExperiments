@@ -77,14 +77,16 @@ runner = ParallelRunner(
     weight_sync_freq=100,
     epsilon_base=0.4,
     epsilon_base_decay=0.999,
-    epsilon_base_min=0.02,
+    epsilon_base_min=0.005,   # reduced from 0.02 — less noise once policy matures
     reward_shaper=gap_reward,
-    per_alpha=0.3,
+    per_alpha=0.6,            # increased from 0.3 — stronger prioritization of high-TD transitions
     per_beta=0.6,
+    lr_decay=0.9999,          # slowly reduce LR to stabilize mature policy
+    lr_min=1e-5,
 )
 
 if __name__ == "__main__":
     if "--test" in sys.argv:
-        runner.test(best="--best" in sys.argv)
+        runner.test(best="--best" in sys.argv, record_best="--record" in sys.argv)
     else:
         runner.train()

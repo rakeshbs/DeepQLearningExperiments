@@ -38,5 +38,13 @@ class BaseEnv(ABC):
     def render(self) -> None:
         """Optional: draw the current frame to a display window."""
 
+    def capture_frame(self) -> "np.ndarray | None":
+        """
+        Optional: return the current frame as an RGB numpy array of shape (H, W, 3).
+        Returns None if the environment does not support frame capture.
+        Used by the test runner for video recording (--record).
+        """
+        return None
+
     def close(self) -> None:
         """Optional: release display or other OS resources when the episode ends."""

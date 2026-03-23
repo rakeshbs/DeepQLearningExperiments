@@ -93,6 +93,7 @@ if __name__ == "__main__":
             num_episodes=num_episodes,
             render=render,
             epsilon=epsilon,
+            record_best="--record" in sys.argv,
         )
     else:
         runner.train()

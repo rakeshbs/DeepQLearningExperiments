@@ -489,6 +489,13 @@ class BreakoutEnv(BaseEnv):
         pygame.display.flip()
         self.clock.tick(FPS)
 
+    def capture_frame(self):
+        """Return the current frame as an RGB (H, W, 3) numpy array, or None if unavailable."""
+        if self.screen is None:
+            return None
+        frame = pygame.surfarray.array3d(self.screen)
+        return frame.transpose(1, 0, 2)  # (W, H, 3) → (H, W, 3)
+
     def close(self) -> None:
         if self._pygame_active:
             pygame.quit()
