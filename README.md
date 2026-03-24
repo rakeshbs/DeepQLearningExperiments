@@ -39,34 +39,6 @@ pip install -r requirements.txt
 For video recording during test:
 - `opencv-python` (`pip install opencv-python`)
 
-## Project Layout
-
-```text
-algorithms/
-  base.py
-  buffers.py
-  dqn.py
-  double_dqn.py
-envs/
-  base.py
-  flappy_bird/
-  breakout/
-experiments/
-  breakout/
-    cnn_dqn.py        ← Breakout pixel CNN experiment
-    notes.md          ← Training notes and lessons learned
-  flappy/
-    dqn.py            ← Flappy Bird state-vector DQN
-    double_dqn.py     ← Flappy Bird state-vector Double DQN
-    cnn_dqn.py        ← Flappy Bird pixel CNN experiment
-training/
-  runner.py
-  parallel_runner.py
-  checkpoint.py
-checkpoints/          ← saved model weights and metadata
-runs/                 ← recorded best-run videos (mp4)
-play.py
-```
 
 ## Environments
 
@@ -191,11 +163,3 @@ Pass `--record` during test to capture the best-scoring episode as an MP4:
 ```bash
 python -m experiments.flappy.double_dqn --test --best --record
 ```
-
-Videos are saved to `runs/best_run_score{N}.mp4`. Each new best automatically replaces the previous file. Requires `opencv-python`.
-
-## Notes
-
-- The pixel experiments are much heavier than the state-vector ones.
-- `ParallelRunner` uses multiple actor processes, so repeated `pygame` startup lines during launch are normal.
-- You may see a `pkg_resources` deprecation warning from `pygame`; that is upstream package noise, not a project-specific error.
